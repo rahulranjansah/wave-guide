@@ -1,85 +1,67 @@
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams,PointStruct, Filter, FieldCondition, MatchValue
-
+from qdrant_client.models import Distance, VectorParams,PointStruct, Filter, FieldCondition, MatchValue, PayloadSchemaType
+from tqdm import tqdm
 from dotenv import load_dotenv
 import os
+import pprint
+from get_acoustic_brainz_data_all import load_tracks_from_cache
 
-from get_acoustic_brainz_data import ingest_json
 
-# Load environment variables from .env file
-load_dotenv()
-
-client = QdrantClient(
-    os.getenv("QDRANT_CLUSTER_NAME"),
-    api_key=os.getenv("QDRANT_API_KEY"),
-)
-
-collections = client.get_collections()
-collection_names = [collection.name for collection in collections.collections]
-# create collection and populate
-
-if "tracks" not in collection_names:
-    print("Creating collection")
-
-    client.create_collection(
-        collection_name="tracks",
-        vectors_config=VectorParams(size=11, distance=Distance.COSINE),
+def init_qdrant_client():
+    load_dotenv()
+    return QdrantClient(
+        os.getenv("QDRANT_CLUSTER_NAME"),
+        api_key=os.getenv("QDRANT_API_KEY"),
     )
 
-tracks_dicts = ingest_json("/Users/jeffreycapobianco/coding/wave_guide/data/acousticbrainz-highlevel-json-20220623/highlevel/00/0/")
-points = []
-for track in tracks_dicts:
-    points.append(PointStruct(
-        id=track['musicbrainz_recordingid'], 
-        vector=[
-            track['acoustic'],
-            track['aggressive'],
-            track['danceable'],
-            track['dark'],
-            track['electronic'],
-            track['happy'],
-            track['party'],
-            track['relaxed'],
-            track['sad'],
-            track['tonal'],
-            track['voice']
-        ], 
-        payload={
-            'title': track['title'],
-            'artist': track['artist'],
-            'album': track['album'],
-            'musicbrainz_recordingid': track['musicbrainz_recordingid']
+# collection creation
+def ensure_collection(client, name, vector_size):
+    existing_collections = [col.name for col in client.get_collections().collections]
+    if name not in existing_collections:
+        print(f"Creating collection: {name}")
+        client.create_collection(
+            collection_name=name,
+            vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
+        )
+
+# vectors and payloads preparation
+def prepare_points(track_dicts):
+    vector_keys = [k for k in track_dicts[0].keys() if k not in {
+        'musicbrainz_recordingid', 'title', 'artist', 'album', 'releasecountry'
+    }]
+    points = []
+    for track in track_dicts:
+        vector = [track[key] for key in vector_keys]
+        payload = {
+            "title": track['title'],
+            "artist": track['artist'],
+            "album": track['album'],
+            "musicbrainz_recordingid": track['musicbrainz_recordingid'],
+            "releasecountry": track['releasecountry']
         }
-    ))
+        points.append(PointStruct(
+            id=track['musicbrainz_recordingid'],
+            vector=vector,
+            payload=payload
+        ))
+    return points, len(vector_keys)
 
-operation_info = client.upsert(
-    collection_name="tracks",
-    wait=True,
-    points=points
-)
+# Batch Upload to Qdrant
+def upload_batches(client, collection_name, points, batch_size=5000):
+    for i in tqdm(range(0, len(points), batch_size), desc="Upserting tracks", unit="batch"):
+        batch = points[i:i + batch_size]
+        response = client.upsert(collection_name=collection_name, points=batch)
+        print(f"Upserted points {i} to {i + len(batch)}")
+        print(f"qdrant_response: {response}")
+    print("All tracks loaded into Qdrant!")
 
-print(operation_info)
 
-# search
+def main():
+    client = init_qdrant_client()
+    tracks = load_tracks_from_cache("../cache/acousticbrainz_all.pkl")
+    points, vector_size = prepare_points(tracks)
+    ensure_collection(client, "tracks", vector_size)
+    upload_batches(client, "tracks", points)
 
-hits = client.search(
-    collection_name="tracks",
-    query_vector=[0.2, 0.1, 0.9, 0.7, 0.2, 0.1, 0.9, 0.7, 0.2, 0.1, 0.9],
-    limit=3
-)
-print("search without filter")
-print(hits)
-
-# search with filter
-
-# search_result = client.search(
-#     collection_name="tracks",
-#     query_vector=[0.2, 0.1, 0.9, 0.7, 0.2, 0.1, 0.9, 0.7, 0.2, 0.1, 0.9],
-#     query_filter=Filter(
-#         must=[FieldCondition(key="city", match=MatchValue(value="London"))]
-#     ),
-#     with_payload=True,
-#     limit=3,
-# )
-# print("search with filter")
-# print(search_result)
+if __name__ == "__main__":
+    main()

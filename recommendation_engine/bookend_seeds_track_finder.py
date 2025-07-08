@@ -106,6 +106,7 @@ class BookendSeedsTrackFinder:
                 iterations_recommendation_kwargs.append(recommendation_kwargs)
 
         recommendation_pool_size = 4
+
         # getting recommendations that utilize bookended seeds
         # r0
         recommendation_kwargs = iterations_recommendation_kwargs[0]

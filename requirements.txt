@@ -1,7 +1,16 @@
 flask==2.2.3
+werkzeug==2.2.3
 spotipy==2.23.0
 gunicorn==20.1.0
 GitPython
 python-dotenv==0.21.1
 pytest
 qdrant-client==1.4.0
+musicbrainz
+argparse
+pickle
+tarfile
+pprint
+tqdm
+requests_oauthlib
+urllib

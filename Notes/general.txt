@@ -1,0 +1,76 @@
+- How do we design or mimic spotify?
+- Come up with popularity info for songs and artists (Spotify search API would they allow this?)
+
+
+Spotipy API banned:
+
+Recommendations -- meaning no playlists if we seed start and end
+Related Artists
+Audio Features (which includes data like "danceability" and "energy") -> alt. high level essentia (Acousticbrainz)
+Audio Analysis (which provides information on a track's structure and rhythm) -> low level essentia (Acousticbrainz)
+Featured Playlists and Category Playlists
+30-second preview URLs in multi-get responses
+Algorithmic and Spotify-owned editorial playlists
+
+
+Whats the plan?
+- Metadata: {Artist Bio and Genre, Song Name}
+
+
+An Artist object: (Construct from Acoustic Brainz, Spotipy)
+Sth like:
+{
+  "items": [
+    {
+      "external_urls": {
+        "spotify": "https://open.spotify.com/artist/06HL4z0CvFAxyc27GXpf02"
+      },
+      "followers": {
+        "href": null,
+        "total": 83226322
+      },
+      "genres": [
+        "pop",
+        "post-teen pop"
+      ],
+      "href": "https://api.spotify.com/v1/artists/06HL4z0CvFAxyc27GXpf02",
+      "id": "06HL4z0CvFAxyc27GXpf02",
+      "images": [
+        {
+          "height": 640,
+          "url": "https://i.scdn.co/image/ab6761610000e5ebc1932d27a60517454833211e",
+          "width": 640
+        }
+      ],
+      "name": "Taylor Swift",
+      "popularity": 100,
+      "type": "artist",
+      "uri": "spotify:artist:06HL4z0CvFAxyc27GXpf02"
+    },
+    {
+      "external_urls": { "...": "..." },
+      "followers": { "...": "..." },
+      "genres": ["latin", "reggaeton", "trap latino"],
+      "href": "...",
+      "id": "4q3ewBCX7sLwd24euuV69X",
+      "images": [ ],
+      "name": "Bad Bunny",
+      "popularity": 97,
+      "type": "artist",
+      "uri": "spotify:artist:4q3ewBCX7sLwd24euuV69X"
+    }
+  ],
+  "total": 50,
+  "limit": 10,
+  "offset": 0,
+  "href": "https://api.spotify.com/v1/me/top/artists?limit=10&time_range=medium_term",
+  "previous": null,
+  "next": "https://api.spotify.com/v1/me/top/artists?limit=10&offset=10&time_range=medium_term"
+}
+
+Song Object: (Construct banned item form Acoustic Brainz, Unbanned from Spotipy)
+{
+    "items": [
+        Audio features, Audio Analyis
+    ]
+}

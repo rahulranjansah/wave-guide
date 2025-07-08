@@ -24,15 +24,26 @@ from utils.validators import validate_new_playlist_request
 def create_app():
     app = Flask(__name__)
     cache_handler = spotipy.cache_handler.FlaskSessionCacheHandler(session)
-    scopes = ["user-library-read", "user-top-read", "playlist-modify-private"]
+    scopes = ["user-read-private",
+              "user-read-email",
+              "playlist-modify-public",
+              "playlist-modify-private",
+              "playlist-read-private",
+              "playlist-read-collaborative",
+              "playlist-modify-public",
+              ]
+
     # .env file loaded in wsgi.py
     # NOTE: THIS IS CASE SENSITIVE
+
     # THE USER MUST INPUT THEIR EMAIL THE SAME AS IT LOOKS ON SPOTIFY DEVELOPER DASHBOARD
+    redirect_uri = os.getenv('SPOTIPY_REDIRECT_URI')
+    app.logger.debug(f"Using redirect URI: {redirect_uri}")
     auth_manager = spotipy.oauth2.SpotifyOAuth(
         cache_handler=cache_handler,
         client_id=os.getenv('SPOTIPY_CLIENT_ID'),
         client_secret=os.getenv('SPOTIPY_CLIENT_SECRET'),
-        redirect_uri=os.getenv('SPOTIPY_REDIRECT_URI'),
+        redirect_uri=redirect_uri,
         scope=scopes,
         open_browser=False,
     )
@@ -58,8 +69,16 @@ app = create_app()
 
 
 def validate_token():
-    if not app.auth_manager.validate_token(app.cache_handler.get_cached_token()):
+    token = app.cache_handler.get_cached_token()
+    if not token:
+        app.logger.debug("No token found")
         return False
+
+    if not app.auth_manager.validate_token(token):
+        app.logger.debug("Token validation failed")
+        return False
+
+    app.logger.debug(f"Token scopes: {token.get('scope', 'no scopes')}")
     return True
 
 def login_required(f):
@@ -72,15 +91,28 @@ def login_required(f):
 
 @app.route("/")
 def index():
+    app.logger.debug("Entering index route")
     if request.args.get("code"):
-        # Step 2. Being redirected from Spotify auth page
-        app.auth_manager.get_access_token(request.args.get("code"))
-        return redirect("/")
+        app.logger.debug(f"Received authorization code: {request.args.get('code')}")
+        try:
+            token_info = app.auth_manager.get_access_token(request.args.get("code"))
+            app.logger.debug(f"Successfully obtained access token: {token_info}")
+            return redirect("/")
+        except Exception as e:
+            app.logger.error(f"Error getting access token: {str(e)}")
+            app.logger.debug(f"Request URL: {request.url}")
+            app.logger.debug(f"Request args: {request.args}")
+            return f"Error during authentication: {str(e)}. Please try again. If the issue persists, check that the redirect URI in your Spotify Developer Dashboard exactly matches: {redirect_uri}"
 
     if not validate_token():
-        # Step 1. Display sign in link when no token
-        auth_url = app.auth_manager.get_authorize_url()
-        return render_template("login.html", auth_url=auth_url)
+        app.logger.debug("No valid token, generating auth URL")
+        try:
+            auth_url = app.auth_manager.get_authorize_url()
+            app.logger.debug(f"Generated auth URL: {auth_url}")
+            return render_template("login.html", auth_url=auth_url)
+        except Exception as e:
+            app.logger.error(f"Error generating auth URL: {str(e)}")
+            return f"Error initializing authentication: {str(e)}. Please try again. If the issue persists, check that the redirect URI in your Spotify Developer Dashboard exactly matches: {redirect_uri}"
 
     # Step 3. Signed in, display data
     app.spotify = spotipy.Spotify(auth_manager=app.auth_manager)
@@ -103,10 +135,35 @@ def index():
     return render_template("index.html", user_name=user_name)
 
 
+@app.route("/callback", methods=["GET"])
+def callback():
+    app.logger.debug("Handling Spotify callback")
+    app.logger.debug(f"Request URL: {request.url}")
+    app.logger.debug(f"Request args: {request.args}")
+    if request.args.get("error"):
+        error = request.args.get("error")
+        app.logger.error(f"Spotify authorization error: {error}")
+        return f"Authorization error: {error}. Please try again."
+
+    if not request.args.get("code"):
+        app.logger.error("No authorization code received from Spotify")
+        return "No authorization code received. Please try again."
+
+    try:
+        code = request.args.get("code")
+        app.logger.debug(f"Received authorization code: {code}")
+        token_info = app.auth_manager.get_access_token(code)
+        app.logger.debug("Successfully obtained access token")
+        return redirect("/")
+    except Exception as e:
+        app.logger.error(f"Error handling callback: {str(e)}")
+        return f"Error during callback handling: {str(e)}. Please try again."
+
 @app.route("/log_out")
 def log_out():
     session.pop("token_info", None)
     return redirect("/")
+
 
 
 # Pure API endpoints that do not return HTML
@@ -130,7 +187,11 @@ def autocomplete():
 @login_required
 def new_playlist():
     validate_new_playlist_request(request.json)
-    resp = playlist.create_playlist(request, app.spotify, session)
+    try:
+        resp = playlist.create_playlist(request, app.spotify, session)
+    except spotipy.exceptions.SpotifyException as e:
+        app.logger.error(f"Spotify API error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
     return jsonify(resp)
 
 # utility to update pythonanywhere code with latest main branch ===
@@ -238,3 +299,27 @@ def get_tracks():
         }
 
     return jsonify(wg_resp)
+
+
+# @app.route("/tracks", methods=["GET"])
+# @login_required
+# def get_tracks():
+#     mood = request.args.get('mood')
+#     if not mood:
+#         abort(400, "Include a mood query parameter. Example: /tracks?mood=calm")
+#     track_finder = MoodTrackFinder(app.spotify, mood, 3)
+#     recs = track_finder.find()
+
+#     # === UPDATED: use metadata_spotify for audio features ===
+#     track_ids = [t['id'] for t in recs]
+#     features = app.metadata_spotify.audio_features(track_ids)
+
+#     wg_resp = {}
+#     for track, feats in zip(recs, features):
+#         wg_resp[track['id']] = {
+#             "name": track["name"],
+#             "artist": track["artists"][0]["name"],
+#             "url": track["external_urls"]["spotify"],
+#             "features": feats or {}
+#         }
+#     return jsonify(wg_resp)

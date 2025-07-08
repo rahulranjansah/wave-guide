@@ -1,0 +1,23 @@
+Playback how
+- Use ISRC (International Standard Recording Code) -- ###working here fix the oauth2 refresh or fallback to using public calls###
+
+- fallback to constructing youtube links using fuzzy matching with filters, spotify links
+- open source yet to explore
+- WILDCARD maybe check with the liscensing company?
+
+Meaningful embeddings
+- Sparse vector configs?
+
+Reading
+- vectors quantization
+- HNSW indexing, FAISS
+- storage space vs precision retrieval
+
+Organizing
+- code, add makefile, readme
+- todo setup the musicbrainz oauth2 with isrc fetching pipeline
+- makefile
+
+Future
+- part 2 bringing bookend and recommedation in the mix
+

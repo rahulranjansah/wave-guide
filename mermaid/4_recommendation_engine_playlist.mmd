@@ -1,0 +1,7 @@
+%% Module: recommendation_engine/playlist
+%% Depends on: recommendation_engine/bookend_seeds_track_finder, recommendation_engine/mood_track_finder, spotipy, typing
+graph TD
+recommendation_engine_playlist[recommendation_engine/playlist] --> recommendation_engine_bookend_seeds_track_finder[recommendation_engine/bookend_seeds_track_finder]
+recommendation_engine_playlist[recommendation_engine/playlist] --> recommendation_engine_mood_track_finder[recommendation_engine/mood_track_finder]
+recommendation_engine_playlist[recommendation_engine/playlist] --> spotipy[spotipy]
+recommendation_engine_playlist[recommendation_engine/playlist] --> typing[typing]
